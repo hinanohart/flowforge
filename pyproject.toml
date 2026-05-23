@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowforge"
+version = "0.1.0a1"
+description = "Open-source LLM-driven sampling-schedule evolver for flow-matching VLA, validated on LIBERO with bootstrap CI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "hinanohart" }]
+keywords = ["vla", "flow-matching", "evolutionary-search", "libero", "shinka-evolve", "openpi"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Science/Research",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pyyaml>=6.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+llm = [
+    "huggingface_hub>=0.24",
+    "transformers>=4.45",
+    "accelerate>=0.33",
+]
+evolve = [
+    "shinka-evolve>=0.1; python_version<'4.0'",
+    "optuna>=3.6",
+]
+vla = []
+bench = []
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+all = ["flowforge[llm,evolve,dev]"]
+
+[project.scripts]
+flowforge = "flowforge.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/hinanohart/flowforge"
+Issues = "https://github.com/hinanohart/flowforge/issues"
+
+[tool.setuptools.packages.find]
+include = ["flowforge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "gpu: requires GPU (skipped in CI)",
+    "smoke: end-to-end smoke test",
+    "slow: slow tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
