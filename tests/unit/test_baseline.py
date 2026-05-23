@@ -32,10 +32,9 @@ def test_random_grid_zero_samples():
 
 
 def test_optuna_when_available():
-    try:
-        import optuna  # noqa: F401
-    except ImportError:
-        return  # not installed in this env; skip silently
+    import pytest
+
+    pytest.importorskip("optuna")
     out = run_optuna(stub_eval, "polynomial", "potential", OptunaConfig(n_trials=8, sampler_seed=0))
     assert out["best_genome"] is not None
     assert 0.0 <= out["best_score"] <= 1.0

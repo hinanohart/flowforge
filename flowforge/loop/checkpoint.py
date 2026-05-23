@@ -69,15 +69,46 @@ def save(project_root: str | os.PathLike, state: dict[str, Any]) -> None:
     p = state_path(project_root)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+    payload = json.dumps(state, indent=2, sort_keys=True)
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(payload)
+        f.flush()
+        os.fsync(f.fileno())
     tmp.replace(p)
+    dir_fd = os.open(str(p.parent), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
+
+
+def mark_step_start(state: dict[str, Any]) -> None:
+    """Stamp the start of a logical step. Pair with `mark_step_end`."""
+    state["_step_start_unix"] = int(time.time())
+
+
+def mark_step_end(state: dict[str, Any]) -> None:
+    """Add the elapsed time of the current step to total_wallclock_s.
+
+    Idle time outside step boundaries (e.g. cron-resume gaps) is *not* counted,
+    preventing the 42-day hard cap from misfiring on long resume intervals.
+    """
+    now = int(time.time())
+    start = int(state.pop("_step_start_unix", now))
+    delta = max(0, now - start)
+    state["total_wallclock_s"] = float(state.get("total_wallclock_s", 0.0)) + float(delta)
+    state["last_step_unix"] = now
 
 
 def update_wallclock(state: dict[str, Any]) -> None:
-    now = int(time.time())
-    delta = max(0, now - state.get("last_step_unix", now))
-    state["total_wallclock_s"] = float(state.get("total_wallclock_s", 0.0)) + float(delta)
-    state["last_step_unix"] = now
+    """Legacy: only advances last_step_unix without adding idle time.
+
+    Retained as a no-op wallclock pin so external callers don't break; new code
+    should use `mark_step_start` / `mark_step_end` to bound real compute time.
+    """
+    state["last_step_unix"] = int(time.time())
 
 
 def hard_cap_exceeded(state: dict[str, Any]) -> bool:

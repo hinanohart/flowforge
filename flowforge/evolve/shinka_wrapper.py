@@ -70,13 +70,19 @@ class EvolveLoop:
                 self.scores[i] = 0.0
 
     def select_and_mutate(self, mutator: Callable[[dict[str, Any]], dict[str, Any]] | None) -> None:
-        """Tournament selection + LLM/random mutation."""
+        """Tournament selection (without replacement) + LLM/random mutation."""
         order = np.argsort(self.scores)[::-1]
         elites = [self.population[i] for i in order[: self.config.elitism]]
         new_pop = list(elites)
+        n = len(self.population)
         while len(new_pop) < self.config.population_size:
-            i, j = self.rng.integers(0, len(self.population), size=2)
-            winner = self.population[i] if self.scores[i] >= self.scores[j] else self.population[j]
+            if n < 2:
+                winner = self.population[0]
+            else:
+                i, j = self.rng.choice(n, size=2, replace=False)
+                winner = (
+                    self.population[i] if self.scores[i] >= self.scores[j] else self.population[j]
+                )
             if mutator is not None and self.rng.random() < self.config.mutation_rate:
                 child = mutator(dict(winner))
             else:
@@ -89,6 +95,9 @@ class EvolveLoop:
     def run(
         self, mutator: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     ) -> dict[str, Any]:
+        # Reset per-run history so successive run() calls on the same instance
+        # do not accumulate stale generations.
+        self.history = []
         self.seed_population()
         for gen in range(self.config.n_generations):
             self.evaluate()

@@ -1,6 +1,6 @@
 # FlowForge
 
-LLM-driven evolutionary search over flow-matching VLA sampling schedules and reward shaping; ships a LIBERO-style eval harness with bootstrap CI 95%. v0.1.0a1 is Phase-0 wiring — the 30-generation evolve run is **not** part of this release.
+LLM-driven evolutionary search over flow-matching VLA sampling schedules and reward shaping; ships a LIBERO-style eval harness with bootstrap CI 95%. v0.1.0a2 is Phase-0 wiring (audit-patched from v0.1.0a1) — the 30-generation evolve run is **not** part of this release.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -26,7 +26,7 @@ Alpha. Phase 0 (this release) ships:
 - Repo skeleton + 8 state machine (S0–S7)
 - AST safety guard, bootstrap CI stats, NaN detector
 - Optuna + Random-grid baselines (parametric)
-- ShinkaEvolve wrapper (function-template space)
+- Built-in evolutionary loop over the function-template space (ShinkaEvolve full integration deferred to v0.2)
 - LIBERO adapter via openpi pi0.5 checkpoint
 - Local-Qwen mutation router (HF API fallback for bootstrap only)
 - CLI (`flowforge run | auto | status`) with checkpoint resume
@@ -48,9 +48,18 @@ GPU note: bootstrap detects `nvidia-smi`; if absent, creates `.flowforge/HITL_RE
 
 ```bash
 flowforge run --task libero_spatial --gens 1 --pop 4 --dry-run
-flowforge auto --session-bound      # full S0→S7, writes .flowforge/state.json
+flowforge auto --session-bound --mutator none   # default: warns + random+elitism
+flowforge auto --session-bound --mutator local  # LLM-driven (CUDA + Qwen-Coder)
+flowforge auto --session-bound --mutator hf     # HF Inference API (HF_API_TOKEN)
 flowforge status                    # current state + ETA
 ```
+
+The `--mutator` flag selects the mutation backend. `none` is the default and
+the orchestrator will warn at S3 entry that the evolve loop is degrading to
+random+elitism (no LLM). Use `local` for the production path (see
+[docs/local_qwen_setup.md](docs/local_qwen_setup.md)), or `hf` for
+quick experiments without GPU. `mutator_active` is recorded in `state.json`
+and the final report so every run is auditable.
 
 ## Architecture
 
@@ -61,7 +70,7 @@ flowforge status                    # current state + ETA
 | S0_init | bootstrap (openpi DL, Qwen fetch, sandbox check) | 30–90 min |
 | S1_baseline_pi0_libero | π0.5 zero-shot eval, bootstrap CI 95% baseline | 8–16 h |
 | S2_baseline_parametric | Optuna 100 trial + Random schedule grid 100 trial | 12–24 h |
-| S3_evolve_main | ShinkaEvolve 30 gen × N=8 × 3 task | 10–20 d |
+| S3_evolve_main | Built-in evolve loop, 30 gen × N=8 × 3 task (ShinkaEvolve hook deferred to v0.2) | 10–20 d |
 | S5_stats_report | re-run + bootstrap CI + curves + honest Δ report | 3–7 d |
 | S6_doc_test | API doc + pytest cov ≥70% | 4–8 h |
 | S7_release | tag + branch protection + Apache 2.0 LICENSE | 1–2 h |

@@ -3,7 +3,7 @@
 Top-level package; see README.md for honest claims and scope.
 """
 
-__version__ = "0.1.0a1"
+__version__ = "0.1.0a2"
 
 from flowforge._types import Candidate, EpisodeResult, FitnessReport, Population, State
 

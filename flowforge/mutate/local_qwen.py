@@ -11,9 +11,9 @@ to this class; we never hard-code the version.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
+
 
 log = logging.getLogger(__name__)
 
@@ -77,26 +77,4 @@ class LocalQwenClient:
         text = self._tokenizer.decode(
             out[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True
         )
-        return _parse_first_json_block(text)
-
-
-def _parse_first_json_block(text: str) -> dict[str, Any]:
-    if not text:
-        raise ValueError("empty completion")
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("no JSON object in completion")
-    depth = 0
-    end = -1
-    for i in range(start, len(text)):
-        c = text[i]
-        if c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    if end < 0:
-        raise ValueError("unbalanced braces")
-    return json.loads(text[start:end])
+        return parse_first_json_block(text)

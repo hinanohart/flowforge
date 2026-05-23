@@ -2,7 +2,8 @@
 
 import pytest
 
-from flowforge.mutate.hf_api_client import HfApiClient, _parse_first_json_block
+from flowforge.mutate._json_extract import parse_first_json_block as _parse_first_json_block
+from flowforge.mutate.hf_api_client import HfApiClient
 from flowforge.mutate.local_qwen import LocalQwenClient
 
 

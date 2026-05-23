@@ -1,5 +1,7 @@
 """Tests for the mutation router."""
 
+import pytest
+
 from flowforge.mutate.router import MutateContext, Router
 
 
@@ -37,9 +39,14 @@ def test_router_prefers_hf_in_s1_if_available():
 def test_router_requires_local_in_s3():
     r = Router(rng_seed=0, hf_client_factory=lambda: FakeClient(_good_payload()))
     assert r.select_backend("S3_evolve_main") == "local_qwen"
+    with pytest.raises(RuntimeError, match="local Qwen"):
+        r.mutate(_good_payload(), MutateContext(state="S3_evolve_main"))
+
+
+def test_router_uses_local_in_s3_when_wired():
+    r = Router(rng_seed=0, local_client_factory=lambda: FakeClient(_good_payload()))
     out = r.mutate(_good_payload(), MutateContext(state="S3_evolve_main"))
-    # No local client -> random fallback
-    assert "sched_template" in out
+    assert out["sched_template"] in {"polynomial", "piecewise", "cosine"}
 
 
 def test_router_falls_back_on_llm_exception():

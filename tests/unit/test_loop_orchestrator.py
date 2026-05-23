@@ -44,7 +44,7 @@ def test_orchestrator_runs_to_done_when_bootstrap_done(tmp_path: Path):
         )
     )
     final = o.run_to_completion(max_steps=20)
-    assert final in {"done", "hitl_required"}, final
+    assert final == "done", (final, o.state.get("hitl_reason"))
 
 
 def test_orchestrator_hitl_short_circuits(tmp_path: Path):

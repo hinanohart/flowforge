@@ -4,7 +4,32 @@ These versions are **not committed**. They live here so that v0.1.0 scope
 stays frozen. None of them will start until Phase 0 (v0.1.0) ships and we
 have read the issue tracker.
 
-## v0.1.1 — honest-marketing patch (post v0.1.0a1)
+## v0.1.0a2 — post-publish audit patch (current release)
+
+Released 2026-05-24. 3-agent audit (architect / omc-code-reviewer / critic)
+found six P0 issues against v0.1.0a1 that were all resolved in this tag:
+
+- pyproject.toml description matches the README honest tagline.
+- CLI gained `--mutator {none,random,hf,local}` and the orchestrator
+  warns at S3 entry when no mutator is wired (honest claim alignment).
+- `checkpoint.mark_step_start` / `mark_step_end` replace the legacy
+  `update_wallclock`; idle gaps no longer count toward the 42-day cap.
+- `checkpoint.save` now `fsync`s the data file and parent directory
+  before the atomic rename (matches the orchestrator docstring).
+- `Router` fail-fasts in S3 when no local Qwen client is wired (no more
+  silent random fallback).
+- GitHub release flipped to `prerelease=true` for both v0.1.0a1 and
+  v0.1.0a2 (PEP 440 alpha convention).
+- `.flowforge/audit.log` is appended on every state transition.
+- `flowforge.guard` and `flowforge.policy` now export their submodules
+  for ergonomic imports.
+- Mutation prompt is loaded from
+  `flowforge/mutate/prompts/mutate_schedule_v1.md` (single source of
+  truth instead of inlined string).
+- `flowforge.mutate._json_extract` DRYs the brace-balanced JSON parser
+  shared by the HF and local clients.
+
+## v0.1.1 — remaining honest-marketing patches
 
 - Wire real LIBERO loader in `flowforge.bench.libero_adapter.make_env`
   (currently raises `NotImplementedError` if LIBERO is importable).

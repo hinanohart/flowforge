@@ -32,11 +32,27 @@ def test_load_corrupt_returns_none(tmp_path: Path):
     assert checkpoint.load(tmp_path) is None
 
 
-def test_update_wallclock_accumulates():
+def test_mark_step_bounds_wallclock_to_step_duration():
+    """Only step-bounded compute time counts; idle gaps must NOT accumulate."""
+    st = checkpoint.initial_state()
+    st["total_wallclock_s"] = 0.0
+    # Simulate a long idle gap before the step begins.
+    st["last_step_unix"] = int(time.time()) - 3600
+    checkpoint.mark_step_start(st)
+    time.sleep(0.05)
+    checkpoint.mark_step_end(st)
+    # The accumulated time must be ~step duration (<1 s), NOT the 3600s idle gap.
+    assert st["total_wallclock_s"] < 2.0
+
+
+def test_update_wallclock_legacy_is_pin_only():
+    """update_wallclock no longer accumulates; it only pins last_step_unix."""
     st = checkpoint.initial_state()
     st["last_step_unix"] = int(time.time()) - 5
+    st["total_wallclock_s"] = 7.0
     checkpoint.update_wallclock(st)
-    assert st["total_wallclock_s"] >= 4.0
+    assert st["total_wallclock_s"] == 7.0  # no accumulation
+    assert st["last_step_unix"] >= int(time.time()) - 1
 
 
 def test_hard_cap_not_exceeded_fresh():

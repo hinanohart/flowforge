@@ -1,17 +1,22 @@
 """Mutation router: picks a backend (local Qwen / HF API / random) by state.
 
 S0_init, S1, S2  → HF API allowed (bootstrap convenience)
-S3_evolve_main   → local Qwen ONLY (cost-cap and reproducibility)
+S3_evolve_main   → local Qwen ONLY (cost-cap and reproducibility); the router
+                   raises RuntimeError if no local client is configured so the
+                   "S3 will refuse" claim is honest at the contract level.
 S5+              → no mutation (post-search analysis)
 
 The router validates LLM output against `search_space.clamp_genome`; if
 clamping warns or JSON is malformed, falls back to a random mutation.
+The SYSTEM prompt is loaded from `prompts/mutate_schedule_v1.md` so it
+can be reviewed and edited without code changes.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
@@ -20,11 +25,26 @@ from flowforge.evolve.search_space import clamp_genome, random_genome
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are FlowForge's mutation engine. You receive a parent genome (JSON) and you "
-    "return a child genome (JSON only, no prose). Modify 1-3 coefficients. The schema "
-    "is fixed; coefficient ranges are documented; never invent new keys."
-)
+_PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "mutate_schedule_v1.md"
+
+
+def _load_system_prompt() -> str:
+    """Read the canonical mutation prompt next to this module.
+
+    Falls back to a minimal inline prompt if the resource is missing
+    (e.g., a stripped wheel) so the router still functions.
+    """
+    try:
+        return _PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError as e:
+        log.warning("mutate prompt file unavailable (%s); using minimal fallback", e)
+        return (
+            "Return a JSON object only with keys sched_template, sched_coefs, "
+            "reward_template, reward_coefs."
+        )
+
+
+SYSTEM_PROMPT = _load_system_prompt()
 
 
 @dataclass
@@ -73,6 +93,13 @@ class Router:
             child = random_genome(self.rng)
             cleaned, _ = clamp_genome(child)
             return cleaned
+
+        if backend == "local_qwen" and self._local_factory is None:
+            # Honest fail-fast: claim says S3 requires local Qwen, contract enforces it.
+            raise RuntimeError(
+                "S3_evolve_main requires a local Qwen client; none was wired. "
+                "Pass local_client_factory=lambda: LocalQwenClient(...) to Router."
+            )
 
         user_prompt = self._build_user(parent, ctx)
         client = self._local_client() if backend == "local_qwen" else self._hf_client()

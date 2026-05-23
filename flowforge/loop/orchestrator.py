@@ -2,13 +2,20 @@
 
 Session-bound execution model:
   * The orchestrator runs *foreground* under `flowforge auto --session-bound`.
-  * After each state transition, state.json is fsync'd so a /compact or VM
-    idle-out can resume from the last completed state without re-running it.
+  * After each state transition, state.json is fsync'd (data file + parent
+    directory) so a /compact or VM idle-out can resume from the last
+    completed state without re-running it.
+  * Per-step wallclock is bounded by `mark_step_start` / `mark_step_end`,
+    so cron-resume idle gaps do NOT count toward the 42-day hard cap.
+  * Every transition appends to `.flowforge/audit.log` for post-hoc tracing.
   * HITL flag short-circuits everything until a human removes it.
 
-This is deliberately *not* a real-time scheduler — each `step()` returns
-control to the caller after one logical unit of work (one state transition
-for S0/S6/S7, one generation for S3, one trial-batch for S2).
+Each `step()` returns control after one logical unit of work (one state
+transition for S0/S6/S7, one full S3 run, one trial-batch for S2). The
+LLM mutator is *not* wired by default — provide one via
+`OrchestratorConfig(mutator=Router(...).mutate)` to enable LLM-driven
+mutation; otherwise the evolve loop degrades to random+elitism and emits
+a warning at S3 entry.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from typing import Any, Callable
 from flowforge._types import State
 from flowforge.bench.fitness import make_eval_fn
 from flowforge.evolve import EvolveConfig, EvolveLoop
+from flowforge.guard.seed import set_global_seed
 from flowforge.loop import checkpoint
 
 log = logging.getLogger(__name__)
@@ -41,31 +49,43 @@ class OrchestratorConfig:
     eval_fn: Callable[[dict[str, Any]], Any] | None = None  # injectable for tests
 
 
+def _audit(project_root: Path, msg: str) -> None:
+    p = project_root / ".flowforge" / "audit.log"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')}\t{msg}\n")
+
+
 class Orchestrator:
     """Drives the 8-state machine to completion or HITL."""
 
     def __init__(self, config: OrchestratorConfig):
         self.config = config
-        self.state: dict[str, Any] = (
-            checkpoint.load(config.project_root) or checkpoint.initial_state()
-        )
+        set_global_seed(int(config.rng_seed))
+        existing = checkpoint.load(config.project_root)
+        self.state: dict[str, Any] = existing or checkpoint.initial_state()
         self.history: list[dict[str, Any]] = []
+        if existing is not None:
+            _audit(config.project_root, f"resume\tstate={existing.get('current')}")
+        else:
+            _audit(config.project_root, "init")
 
     # ---------- public API -----------------------------------------------
 
     def save(self) -> None:
-        checkpoint.update_wallclock(self.state)
         checkpoint.save(self.config.project_root, self.state)
 
     def step(self) -> str:
         """Advance the machine by one logical unit. Returns the new state."""
         if checkpoint.hitl_required(self.config.project_root, self.state):
             self.state["current"] = State.HITL.value
+            _audit(self.config.project_root, "hitl_short_circuit")
             self.save()
             return self.state["current"]
         if checkpoint.hard_cap_exceeded(self.state):
             log.warning("42-day hard cap exceeded; jumping to S5_stats_report")
             self.state["current"] = State.S5_STATS_REPORT.value
+            _audit(self.config.project_root, "hard_cap_exceeded")
             self.save()
             return self.state["current"]
 
@@ -78,17 +98,25 @@ class Orchestrator:
             self.save()
             return State.HITL.value
 
+        checkpoint.mark_step_start(self.state)
+        before = cur
         handler()
+        checkpoint.mark_step_end(self.state)
+        after = self.state["current"]
+        if before != after:
+            _audit(self.config.project_root, f"transition\t{before}\t->\t{after}")
         self.save()
-        return self.state["current"]
+        return after
 
     def run_to_completion(self, max_steps: int = 200) -> str:
         """Loop step() until DONE / HITL / hard cap. Bounded for safety."""
         for _ in range(max_steps):
             current = self.step()
             if current in {State.DONE.value, State.HITL.value}:
+                _audit(self.config.project_root, f"terminal\t{current}")
                 return current
         log.warning("max_steps=%d exhausted before DONE; treating as session-bound exit", max_steps)
+        _audit(self.config.project_root, "max_steps_exhausted")
         return self.state["current"]
 
     # ---------- state handlers -------------------------------------------
@@ -167,7 +195,16 @@ class Orchestrator:
         self.state["current"] = State.S3_EVOLVE_MAIN.value
 
     def _s3_evolve_main(self) -> None:
-        log.info("S3_evolve_main: ShinkaEvolve (function-template space)")
+        log.info("S3_evolve_main: coefficient evolve loop (function-template space)")
+        if self.config.mutator is None:
+            log.warning(
+                "S3_evolve_main: mutator not wired — evolve loop will degrade to "
+                "random+elitism. Provide OrchestratorConfig(mutator=Router(...).mutate) "
+                "to enable LLM-driven mutation."
+            )
+            self.state["mutator_active"] = False
+        else:
+            self.state["mutator_active"] = True
         ef = self._eval_fn()
         loop = EvolveLoop(
             EvolveConfig(
@@ -186,7 +223,7 @@ class Orchestrator:
         self.state["current"] = State.S5_STATS_REPORT.value
 
     def _s5_stats_report(self) -> None:
-        log.info("S5_stats_report: bootstrap CI + Δ table")
+        log.info("S5_stats_report: bootstrap CI + delta table")
         ef = self._eval_fn()
         best = self.state.get("evolve_best") or {
             "sched_template": "polynomial",
@@ -206,6 +243,7 @@ class Orchestrator:
                 getattr(report, "success_rate_ci95_low", 0.0),
                 getattr(report, "success_rate_ci95_high", 0.0),
             ],
+            "mutator_active": self.state.get("mutator_active", False),
         }
         self.state["current"] = State.S6_DOC_TEST.value
 
@@ -220,9 +258,10 @@ class Orchestrator:
         self.state["current"] = State.S7_RELEASE.value
 
     def _s7_release(self) -> None:
-        log.info("S7_release: requires user-driven `gh repo create` & tag — leaving DONE marker")
-        # The actual `gh` calls are run by scripts/release.sh under user authority,
-        # not by the orchestrator, to keep token usage explicit.
+        log.info("S7_release: leaves a `release_ready` marker for scripts/release.sh")
+        # The actual `gh` calls run via scripts/release.sh under the user's
+        # authority — the orchestrator does not invoke gh directly, keeping
+        # token usage explicit and reviewable.
         (self.config.project_root / ".flowforge" / "release_ready").write_text(
             time.strftime("%Y-%m-%dT%H:%M:%S%z")
         )

@@ -7,10 +7,10 @@ backend; the router will raise if HF API is asked to mutate during S3.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
+
 
 log = logging.getLogger(__name__)
 
@@ -63,29 +63,6 @@ class HfApiClient:
                 .choices[0]
                 .message.content
             )
-        except Exception as e:  # noqa: BLE001 — provider errors propagate as ValueError
+        except (RuntimeError, ValueError, OSError, ConnectionError) as e:
             raise ValueError(f"HF API error: {e}") from e
-        return _parse_first_json_block(text)
-
-
-def _parse_first_json_block(text: str) -> dict[str, Any]:
-    """Permissively pull the first {...} object out of a text completion."""
-    if not text:
-        raise ValueError("empty completion")
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("no JSON object in completion")
-    depth = 0
-    end = -1
-    for i in range(start, len(text)):
-        c = text[i]
-        if c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    if end < 0:
-        raise ValueError("unbalanced braces in completion")
-    return json.loads(text[start:end])
+        return parse_first_json_block(text)
