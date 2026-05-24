@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Any
 
+from flowforge.mutate._json_extract import parse_first_json_block
+
 
 log = logging.getLogger(__name__)
 

@@ -42,13 +42,17 @@ def _build_mutator(
 
     from flowforge.mutate import HfApiClient, LocalQwenClient, MutateContext, Router
 
-    local_factory = None
-    hf_factory = None
+    local_factory: Callable[[], Any] | None = None
+    hf_factory: Callable[[], Any] | None = None
     if mode == "local":
         model_id = _read_qwen_candidate(project_root)
-        local_factory = lambda: LocalQwenClient(model_id=model_id)
+
+        def local_factory() -> LocalQwenClient:  # type: ignore[no-redef]
+            return LocalQwenClient(model_id=model_id)
     elif mode == "hf":
-        hf_factory = lambda: HfApiClient()
+
+        def hf_factory() -> HfApiClient:  # type: ignore[no-redef]
+            return HfApiClient()
     elif mode != "random":
         raise click.BadParameter(f"unknown mutator mode: {mode!r}")
 
