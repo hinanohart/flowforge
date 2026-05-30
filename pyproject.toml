@@ -8,12 +8,12 @@ version = "0.1.0a2"
 description = "LLM-driven evolutionary search over flow-matching VLA sampling schedules and reward shaping; ships a LIBERO-style eval harness with bootstrap CI 95%. v0.1.0a1 is Phase-0 wiring — the 30-generation evolve run is NOT part of this release."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 authors = [{ name = "hinanohart" }]
 keywords = ["vla", "flow-matching", "evolutionary-search", "libero", "shinka-evolve", "openpi"]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

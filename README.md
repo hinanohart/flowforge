@@ -2,7 +2,7 @@
 
 LLM-driven evolutionary search over flow-matching VLA sampling schedules and reward shaping; ships a LIBERO-style eval harness with bootstrap CI 95%. v0.1.0a2 is Phase-0 wiring (audit-patched from v0.1.0a1) — the 30-generation evolve run is **not** part of this release.
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 
@@ -16,7 +16,7 @@ FlowForge offers three things, no more:
 
 What FlowForge does **not** claim:
 
-- Not a new VLA model. Builds on Physical-Intelligence/openpi (Apache-2.0).
+- Not a new VLA model. Builds on Physical-Intelligence/openpi (MIT).
 - Not faster than RL fine-tuning at convergence. Aims for sample-efficient *zero-grad* improvement during inference-time.
 - Not autonomous. The orchestrator runs in session-bound mode; WSL2 VMs idle out at 60 s by default ([Microsoft docs](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)), so long runs require a wakeful host or systemd unit on bare Linux.
 
@@ -73,7 +73,7 @@ and the final report so every run is auditable.
 | S3_evolve_main | Built-in evolve loop, 30 gen × N=8 × 3 task (ShinkaEvolve hook deferred to v0.2) | 10–20 d |
 | S5_stats_report | re-run + bootstrap CI + curves + honest Δ report | 3–7 d |
 | S6_doc_test | API doc + pytest cov ≥70% | 4–8 h |
-| S7_release | tag + branch protection + Apache 2.0 LICENSE | 1–2 h |
+| S7_release | tag + branch protection + MIT LICENSE | 1–2 h |
 
 Hard cap: **42 days**. On overrun, S5 emits a `partial` report.
 
@@ -97,11 +97,11 @@ Future versions are not committed; they live in [docs/roadmap.md](docs/roadmap.m
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Acknowledgements
 
-- [Physical-Intelligence/openpi](https://github.com/Physical-Intelligence/openpi) — π0 / π0.5 policy + LIBERO support (Apache-2.0)
-- [SakanaAI/ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) — evolutionary search framework (Apache-2.0)
+- [Physical-Intelligence/openpi](https://github.com/Physical-Intelligence/openpi) — π0 / π0.5 policy + LIBERO support (MIT)
+- [SakanaAI/ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) — evolutionary search framework (MIT)
 - [LIBERO](https://libero-project.github.io/) — benchmark suite
 - [Qwen team](https://huggingface.co/Qwen) — open-weight code LLMs
